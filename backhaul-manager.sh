@@ -716,9 +716,9 @@ menu_create_tunnel() {
     # ── Step 1: Transport ─────────────────────────────────────────────────────
     echo -e "\n  ${BOLD}${WHITE}Step 1 of 3 — Transport Protocol${NC}"
     echo -e "  ${WHITE}[1]${NC} ${LYELLOW}TCP${NC}    — Simple & lightweight, no multiplexing"
-    echo -e "  ${WHITE}[2]${NC} ${LYELLOW}TCPMUX${NC} — TCP + SMUX multiplexing ${LGREEN}(recommended)${NC}"
+    echo -e "  ${WHITE}[2]${NC} ${LYELLOW}TCPMUX${NC} — TCP + SMUX multiplexing"
     echo -e "  ${WHITE}[3]${NC} ${LYELLOW}WSMUX${NC}  — WebSocket + mux, works through CDN/proxies"
-    echo -e "  ${WHITE}[4]${NC} ${LYELLOW}WSSMUX${NC} — WebSocket Secure (TLS) + mux, encrypted"
+    echo -e "  ${WHITE}[4]${NC} ${LYELLOW}WSSMUX${NC} — WebSocket Secure (TLS) + mux, encrypted ${LGREEN}(recommended)${NC}"
     separator
     prompt "Choice [1-4]:"; read -r proto_choice
 

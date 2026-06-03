@@ -2,6 +2,8 @@
 
 Modern terminal manager for creating and operating [Backhaul](https://github.com/Musixal/Backhaul) tunnels with a clean interactive workflow.
 
+Join the Telegram channel for updates, notes, and more BackhaulManager content: [@B3hnamR](https://t.me/B3hnamR)
+
 ![BackhaulManager showcase](assets/showcase.png)
 
 ## Highlights
@@ -29,6 +31,10 @@ sudo ./backhaul-manager.sh
 ```
 
 Use **Install / Update Binary** first if Backhaul is not installed yet, then create a tunnel from the main menu.
+
+## Recommended Setup
+
+For the best default experience, choose **WSSMUX** as the tunnel transport and use **Preset** mode for tuning parameters.
 
 ## Typical Workflow
 
