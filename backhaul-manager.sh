@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  Backhaul Free - Tunnel Manager
-#  Version : 1.0.0
+#  Version : 1.1.0
 #  Author  : @B3hnamR
 #  Supports: TCP | TCPMUX | WSMUX | WSSMUX
 #  Roles   : Iran (Server) | Kharej (Client)
@@ -49,7 +49,7 @@ require_root() {
 
 check_binary() {
     if [[ ! -x "$BINARY" ]]; then
-        warn "Backhaul binary not found. Please install it first (Main Menu → Option 6)."
+        warn "Backhaul binary not found. Please install it first (Main Menu → Option 7)."
         press_enter
         return 1
     fi
@@ -170,7 +170,7 @@ LOGO
 ask_server_role() {
     clear
     _print_logo
-    echo -e "  ${DIM}Backhaul Free Tunnel Manager v1.0.0 by ${NC}${CYAN}@B3hnamR${NC}"
+    echo -e "  ${DIM}Backhaul Free Tunnel Manager v1.1.0 by ${NC}${CYAN}@B3hnamR${NC}"
     echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
     # Try auto-detect first
@@ -220,7 +220,7 @@ print_header() {
     esac
 
     _print_logo
-    echo -e "  ${DIM}Backhaul Free Tunnel Manager v1.0.0 by ${NC}${CYAN}@B3hnamR${NC}"
+    echo -e "  ${DIM}Backhaul Free Tunnel Manager v1.1.0 by ${NC}${CYAN}@B3hnamR${NC}"
     echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "  ${GRAY}IP   : ${WHITE}$ip${NC}   ${GRAY}Role : ${role_color}${BOLD}$role_label${NC}"
     [[ -x "$BINARY" ]] && {
@@ -1395,6 +1395,280 @@ menu_firewall() {
     press_enter
 }
 
+# ─── TWO-WAY LINK TEST ───────────────────────────────────────────────────────
+linktest_valid_host() {
+    local host="$1"
+    [[ -n "$host" ]] && [[ "$host" != -* ]] && [[ "$host" =~ ^[A-Za-z0-9._:-]+$ ]]
+}
+
+linktest_normalize_ports() {
+    printf '%s\n' "$1" | tr ',' ' ' | awk '{$1=$1; print}'
+}
+
+linktest_ask_default() {
+    local label="$1" def="$2" ans
+    echo -ne "${ARROW} ${WHITE}${label} ${DIM}[${def}]${NC}: " >&2
+    read -r ans
+    echo "${ans:-$def}"
+}
+
+linktest_public_ip() {
+    local ip=""
+    if command -v curl >/dev/null 2>&1; then
+        ip="$(timeout 4 curl -4 -sS https://api.ipify.org 2>/dev/null || true)"
+    fi
+    [[ -n "$ip" ]] && echo "$ip" || echo "unknown"
+}
+
+linktest_tcp_connect() {
+    local host="$1" port="$2" timeout_sec="$3"
+    if command -v nc >/dev/null 2>&1; then
+        timeout "$timeout_sec" nc -z -w "$timeout_sec" "$host" "$port" >/dev/null 2>&1
+    else
+        timeout "$timeout_sec" bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$host" "$port" >/dev/null 2>&1
+    fi
+}
+
+linktest_tcp_banner() {
+    local host="$1" port="$2" timeout_sec="$3"
+    if command -v nc >/dev/null 2>&1; then
+        printf '\n' | timeout "$timeout_sec" nc -w 1 "$host" "$port" 2>/dev/null | head -c 128 | tr -d '\r'
+    else
+        timeout "$timeout_sec" bash -c '
+            exec 3<>"/dev/tcp/$1/$2" || exit 1
+            timeout 1 head -c 128 <&3 2>/dev/null || true
+            exec 3<&-
+            exec 3>&-
+        ' bash "$host" "$port" 2>/dev/null | tr -d '\r'
+    fi
+}
+
+linktest_port_in_use() {
+    command -v ss >/dev/null 2>&1 || return 1
+    ss -lntu 2>/dev/null | awk '{print $5}' | grep -qE ":$1$"
+}
+
+linktest_start_listener() {
+    local bind_ip="$1" port="$2" tmp_dir="$3" pids_ref="$4"
+    local -n _pids="$pids_ref"
+
+    if linktest_port_in_use "$port"; then
+        warn "Port $port is already in use - skipped."
+        return 0
+    fi
+
+    cat > "$tmp_dir/listener-$port.py" <<'PY'
+import socket, sys, time, signal
+
+def handle_sigterm(sig, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, handle_sigterm)
+
+bind_ip = sys.argv[1]
+port = int(sys.argv[2])
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind((bind_ip, port))
+s.listen(1024)
+
+while True:
+    conn, addr = s.accept()
+    now = time.strftime("%H:%M:%S")
+    peer = f"{addr[0]}:{addr[1]}"
+    print(f"  [{now}]  {peer}  connected on port {port}", flush=True)
+    try:
+        conn.sendall(b"LINKTEST_OK\n")
+    except Exception:
+        pass
+    finally:
+        conn.close()
+PY
+
+    python3 "$tmp_dir/listener-$port.py" "$bind_ip" "$port" &
+    local pid="$!"
+    _pids+=("$pid")
+    sleep 0.3
+
+    if kill -0 "$pid" 2>/dev/null; then
+        success "Port $port is now listening (pid $pid)"
+    else
+        warn "Port $port failed to bind."
+    fi
+}
+
+linktest_cleanup_listeners() {
+    local tmp_dir="$1" pids_ref="$2"
+    local -n _pids="$pids_ref"
+    local pid
+
+    for pid in "${_pids[@]}"; do
+        kill "$pid" 2>/dev/null || true
+    done
+    rm -rf "$tmp_dir" 2>/dev/null || true
+}
+
+menu_link_test() {
+    section "Two-Way Link Test"
+
+    echo -e "  ${BOLD}${WHITE}Local Network:${NC}"
+    echo -e "  ${BULLET} Hostname  : ${CYAN}$(hostname)${NC}"
+    echo -e "  ${BULLET} Local IPs : ${CYAN}$(hostname -I 2>/dev/null | awk '{$1=$1; print}')${NC}"
+    echo -e "  ${BULLET} Public IP : ${CYAN}$(linktest_public_ip)${NC}"
+    echo -e "  ${BULLET} Role      : ${LYELLOW}${SERVER_ROLE}${NC}"
+    separator
+
+    echo -e "  ${WHITE}[1]${NC} Listen  - open temporary TCP test ports on this server"
+    echo -e "  ${WHITE}[2]${NC} Test    - test ping + TCP reachability to a peer"
+    echo -e "  ${WHITE}[3]${NC} Info    - show listening TCP ports"
+    echo -e "  ${WHITE}[0]${NC} Back"
+    separator
+    prompt "Choice:"; read -r lt_choice
+
+    case "$lt_choice" in
+        1)
+            if ! command -v python3 >/dev/null 2>&1; then
+                warn "python3 not found. Listener mode requires python3."
+                press_enter
+                return
+            fi
+
+            local bind_ip ports_raw duration peer_hint
+            bind_ip="$(linktest_ask_default "Bind IP" "0.0.0.0")"
+            ports_raw="$(linktest_ask_default "Ports (space or comma separated)" "80 443 2052 2053 2082 2083 2086 2087 2095 2096 8080 8443 8880")"
+            ports_raw="$(linktest_normalize_ports "$ports_raw")"
+            peer_hint="$(linktest_ask_default "Peer IP for display only" "AUTO")"
+            duration="$(linktest_ask_default "Auto-stop after seconds" "300")"
+            [[ "$duration" =~ ^[0-9]+$ ]] || duration=300
+
+            local tmp_dir; tmp_dir="$(mktemp -d /tmp/backhaul-linktest.XXXXXX)"
+            local listener_pids=()
+            local valid_ports=()
+            local p
+            for p in $ports_raw; do
+                if is_valid_port "$p"; then
+                    valid_ports+=("$p")
+                else
+                    warn "Invalid port skipped: $p"
+                fi
+            done
+
+            if [[ ${#valid_ports[@]} -eq 0 ]]; then
+                warn "No valid ports were provided."
+                rm -rf "$tmp_dir" 2>/dev/null || true
+                press_enter
+                return
+            fi
+
+            separator
+            for p in "${valid_ports[@]}"; do
+                linktest_start_listener "$bind_ip" "$p" "$tmp_dir" listener_pids
+            done
+
+            echo ""
+            echo -e "  ${BOLD}${WHITE}Listening:${NC}"
+            [[ "$peer_hint" != "AUTO" ]] && echo -e "  ${BULLET} Peer hint : ${CYAN}${peer_hint}${NC}"
+            echo -e "  ${BULLET} Ports     : ${WHITE}${valid_ports[*]}${NC}"
+            echo -e "  ${BULLET} Duration  : ${WHITE}${duration}s${NC}"
+            echo -e "  ${DIM}Incoming connections will appear below. Press Enter to stop.${NC}"
+            separator
+
+            trap 'echo; warn "Interrupted. Stopping link test listeners..."; linktest_cleanup_listeners "$tmp_dir" listener_pids; trap - INT TERM; return 130' INT TERM
+            read -r -t "$duration" _ || true
+            trap - INT TERM
+            linktest_cleanup_listeners "$tmp_dir" listener_pids
+            success "Link test listeners stopped."
+            press_enter
+            ;;
+        2)
+            local peer ports_raw timeout_sec ping_count
+            peer="$(linktest_ask_default "Peer IP / domain" "")"
+            if ! linktest_valid_host "$peer"; then
+                warn "A valid peer IP/domain is required."
+                press_enter
+                return
+            fi
+
+            ports_raw="$(linktest_ask_default "TCP ports (space or comma separated)" "80 443 2052 2053 2082 2083 2086 2087 2095 2096 8080 8443 8880")"
+            ports_raw="$(linktest_normalize_ports "$ports_raw")"
+            timeout_sec="$(linktest_ask_default "TCP timeout seconds" "3")"
+            [[ "$timeout_sec" =~ ^[0-9]+$ ]] || timeout_sec=3
+            ping_count="$(linktest_ask_default "Ping count" "4")"
+            [[ "$ping_count" =~ ^[0-9]+$ ]] || ping_count=4
+
+            echo ""
+            section "Ping Test"
+            if command -v ping >/dev/null 2>&1; then
+                local ping_out loss
+                ping_out="$(ping -c "$ping_count" -W 1 "$peer" 2>&1 || true)"
+                echo "$ping_out" | grep -E "^(PING|[0-9]+ bytes|---)" | sed 's/^/  /' || true
+                loss="$(echo "$ping_out" | grep -oE '[0-9]+% packet loss' || echo "?")"
+                if echo "$ping_out" | grep -q ", 0% packet loss"; then
+                    success "Ping: no loss ($loss)"
+                elif echo "$ping_out" | grep -q "100% packet loss"; then
+                    warn "Ping: all packets lost ($loss)"
+                else
+                    warn "Ping: partial loss ($loss)"
+                fi
+            else
+                warn "ping not found."
+            fi
+
+            echo ""
+            section "TCP Reachability"
+            local ok_count=0 fail_count=0 banner=""
+            local p
+            for p in $ports_raw; do
+                if ! is_valid_port "$p"; then
+                    warn "Invalid port skipped: $p"
+                    continue
+                fi
+
+                if linktest_tcp_connect "$peer" "$p" "$timeout_sec"; then
+                    ok_count=$((ok_count + 1))
+                    banner="$(linktest_tcp_banner "$peer" "$p" "$timeout_sec" | head -n 1 || true)"
+                    if [[ -n "${banner:-}" ]]; then
+                        success "Port $p OPEN - banner: $banner"
+                    else
+                        success "Port $p OPEN"
+                    fi
+                else
+                    fail_count=$((fail_count + 1))
+                    warn "Port $p BLOCKED"
+                fi
+            done
+
+            separator
+            if (( ok_count > 0 && fail_count == 0 )); then
+                success "ALL OPEN - all $ok_count tested port(s) are reachable."
+            elif (( ok_count > 0 && fail_count > 0 )); then
+                warn "PARTIAL - $ok_count open / $fail_count blocked"
+            else
+                warn "ALL BLOCKED - no tested port is reachable."
+                echo -e "  ${DIM}Likely cause: firewall, routing issue, provider filtering, or wrong peer address.${NC}"
+            fi
+            press_enter
+            ;;
+        3)
+            echo ""
+            section "Listening TCP Ports"
+            ss -lntp 2>/dev/null | awk 'NR>1 {
+                split($5, a, ":");
+                port = a[length(a)];
+                proc = $0; gsub(/.*users:\(\("/, "", proc); gsub(/".*/, "", proc);
+                printf "  %-6s  %s\n", port, proc
+            }' || true
+            press_enter
+            ;;
+        0) return ;;
+        *)
+            warn "Invalid option"
+            sleep 1
+            ;;
+    esac
+}
+
 # ─── INFO PANEL ──────────────────────────────────────────────────────────────
 menu_info() {
     section "System & Tunnel Info"
@@ -1656,8 +1930,9 @@ main_menu() {
         echo -e "            ${DIM}(start / stop / restart / logs / edit / delete)${NC}"
         echo -e "  ${MAGENTA}[3]${NC}  Backup & Restore Configs"
         echo -e "  ${MAGENTA}[4]${NC}  Firewall Helper"
-        echo -e "  ${GRAY}[5]${NC}  System Info"
-        echo -e "  ${GRAY}[6]${NC}  Install / Update Binary"
+        echo -e "  ${LCYAN}[5]${NC}  Two-Way Link Test"
+        echo -e "  ${GRAY}[6]${NC}  System Info"
+        echo -e "  ${GRAY}[7]${NC}  Install / Update Binary"
         echo -e "  ${RED}[0]${NC}  Exit"
         separator
         prompt "Choice:"; read -r main_choice
@@ -1667,8 +1942,9 @@ main_menu() {
             2) menu_manage_tunnels ;;
             3) menu_backup ;;
             4) menu_firewall ;;
-            5) menu_info ;;
-            6) menu_install ;;
+            5) menu_link_test ;;
+            6) menu_info ;;
+            7) menu_install ;;
             0)
                 echo -e "\n${DIM}Bye!${NC}\n"
                 exit 0

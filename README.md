@@ -14,6 +14,7 @@ Join the Telegram channel for updates, notes, and more BackhaulManager content: 
 - Preset and advanced tuning modes for production-style configs
 - Systemd service generation, start/stop/restart, live logs, and deletion
 - Config backup/restore and firewall helper for UFW or iptables
+- Built-in two-way link test for ping and TCP reachability checks
 - WSSMUX TLS certificate generation with OpenSSL
 
 ## Requirements
