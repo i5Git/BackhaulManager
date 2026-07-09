@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPO="${BACKHAUL_MANAGER_REPO:-MahbodAz/BackhaulManager}"
+REPO="${BACKHAUL_MANAGER_REPO:-i5Git/BackhaulManager}"
 BRANCH="${BACKHAUL_MANAGER_BRANCH:-master}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 SOURCE_URL="${RAW_BASE}/backhaul-manager.sh"
