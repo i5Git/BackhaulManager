@@ -18,7 +18,7 @@ need_root() {
     red "This installer must be run as root."
     echo
     echo "Use:"
-    echo "  curl -fsSL ${RAW_BASE}/install.sh | sudo bash"
+    echo "  sudo bash -c \"\$(curl -fsSL ${RAW_BASE}/install.sh)\""
     echo
     exit 1
   fi
@@ -88,7 +88,10 @@ main() {
       exec "$TARGET"
     else
       yellow "Not auto-starting the interactive menu because the installer is running from a pipe."
-      echo "Start it manually with:"
+      echo "To install and auto-open with Bash, use:"
+      echo "  sudo bash -c \"\$(curl -fsSL ${RAW_BASE}/install.sh)\""
+      echo
+      echo "Or start it manually with:"
       echo "  sudo backhaul-manager"
     fi
   fi
