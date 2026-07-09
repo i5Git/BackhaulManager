@@ -29,14 +29,16 @@ Join the Telegram channel for updates, notes, and more BackhaulManager content: 
 Run this on your VPS:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh | sudo bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh)"
 ```
 
 If you are already logged in as `root`, this also works:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh)"
 ```
+
+This Bash method avoids `/dev/fd` process-substitution issues and keeps your terminal attached, so the interactive menu can open normally after installation.
 
 After installation, you can start the manager anytime with:
 
