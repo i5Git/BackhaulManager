@@ -24,12 +24,29 @@ need_root() {
   fi
 }
 
+missing_commands() {
+  local missing=()
+  local cmd
+  for cmd in curl wget tar openssl ip ss; do
+    command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+  done
+  printf '%s\n' "${missing[@]}"
+}
+
 install_deps() {
-  blue "Installing required packages..."
+  local missing
+  missing="$(missing_commands | xargs 2>/dev/null || true)"
+
+  if [[ -z "$missing" ]]; then
+    green "Required commands already exist. Skipping package install."
+    return 0
+  fi
+
+  yellow "Missing required commands: $missing"
+  blue "Installing missing dependencies only. No apt update will be run."
 
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
     apt-get install -y curl wget tar ca-certificates openssl iproute2
   elif command -v dnf >/dev/null 2>&1; then
     dnf install -y curl wget tar ca-certificates openssl iproute
@@ -38,7 +55,7 @@ install_deps() {
   elif command -v apk >/dev/null 2>&1; then
     apk add --no-cache curl wget tar ca-certificates openssl iproute2
   else
-    yellow "Could not detect package manager. Make sure curl/wget/tar/openssl are installed."
+    yellow "Could not detect package manager. Install these manually: curl wget tar ca-certificates openssl iproute2"
   fi
 }
 
