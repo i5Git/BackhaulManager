@@ -24,7 +24,21 @@ Join the Telegram channel for updates, notes, and more BackhaulManager content: 
 - `bash`, `curl` or `wget`, `tar`
 - Optional: `ufw`, `iptables`, `openssl`
 
-## Quick Start
+## One-command install
+
+Run this on your VPS:
+
+```bash
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh)
+```
+
+After installation, you can start the manager anytime with:
+
+```bash
+sudo backhaul-manager
+```
+
+## Manual Quick Start
 
 ```bash
 chmod +x backhaul-manager.sh
