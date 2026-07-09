@@ -83,8 +83,14 @@ main() {
   verify_install
 
   if [[ "${BACKHAUL_MANAGER_NO_RUN:-0}" != "1" ]]; then
-    blue "Starting BackhaulManager..."
-    exec "$TARGET"
+    if [[ -t 0 ]]; then
+      blue "Starting BackhaulManager..."
+      exec "$TARGET"
+    else
+      yellow "Not auto-starting the interactive menu because the installer is running from a pipe."
+      echo "Start it manually with:"
+      echo "  sudo backhaul-manager"
+    fi
   fi
 }
 
