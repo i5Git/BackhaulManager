@@ -18,7 +18,7 @@ need_root() {
     red "This installer must be run as root."
     echo
     echo "Use:"
-    echo "  sudo bash <(curl -fsSL ${RAW_BASE}/install.sh)"
+    echo "  curl -fsSL ${RAW_BASE}/install.sh | sudo bash"
     echo
     exit 1
   fi
