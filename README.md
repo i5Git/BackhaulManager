@@ -29,7 +29,13 @@ Join the Telegram channel for updates, notes, and more BackhaulManager content: 
 Run this on your VPS:
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh)
+curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh | sudo bash
+```
+
+If you are already logged in as `root`, this also works:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/i5Git/BackhaulManager/master/install.sh | bash
 ```
 
 After installation, you can start the manager anytime with:
